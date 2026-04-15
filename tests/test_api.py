@@ -1,10 +1,6 @@
-import sys
 from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
-
-# Mock voxcpm module before importing main
-sys.modules['voxcpm'] = MagicMock()
 
 
 def _make_synth(is_ready: bool = True) -> MagicMock:
