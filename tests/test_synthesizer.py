@@ -1,9 +1,5 @@
 import sys
-from unittest.mock import MagicMock
-
-sys.modules['voxcpm'] = MagicMock()
-
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 from synthesizer import Synthesizer
