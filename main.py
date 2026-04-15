@@ -22,7 +22,12 @@ app = FastAPI(title="VoxCPM TTS API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://prafulls.me", "http://prafulls.me"],
+    allow_origins=[
+        "https://prafulls.me",
+        "http://prafulls.me",
+        "https://www.prafulls.me",
+        "http://www.prafulls.me",
+    ],
     allow_origin_regex=(
         r"(https?://localhost(:\d+)?|https?://[a-zA-Z0-9-]+\.zeliontech\.in)"
     ),
