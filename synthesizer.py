@@ -13,7 +13,10 @@ class Synthesizer:
 
     def load(self) -> None:
         self.model = VoxCPM.from_pretrained(self.model_id, load_denoiser=False)
-        self._device = str(next(self.model.parameters()).device)
+        try:
+            self._device = str(next(self.model.tts_model.parameters()).device)
+        except (AttributeError, StopIteration):
+            self._device = "unknown"
 
     @property
     def is_ready(self) -> bool:
@@ -28,7 +31,11 @@ class Synthesizer:
         if not self.is_ready:
             return 0.0
         import torch
-        return round(torch.cuda.memory_allocated() / 1e9, 1)
+        if self._device and self._device.startswith("cuda"):
+            return round(torch.cuda.memory_allocated() / 1e9, 1)
+        if self._device and self._device.startswith("mps"):
+            return round(torch.mps.current_allocated_memory() / 1e9, 1)
+        return 0.0
 
     def build_text(self, text: str, voice_description: str | None) -> str:
         if voice_description:

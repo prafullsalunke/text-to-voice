@@ -51,7 +51,7 @@ def test_load_calls_from_pretrained():
         mock_model = MagicMock()
         param_mock = MagicMock()
         param_mock.device = "cpu"
-        mock_model.parameters.return_value = iter([param_mock])
+        mock_model.tts_model.parameters.return_value = iter([param_mock])
         mock_cls.from_pretrained.return_value = mock_model
         s.load()
     mock_cls.from_pretrained.assert_called_once_with(
