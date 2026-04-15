@@ -13,7 +13,7 @@ class Synthesizer:
 
     def load(self) -> None:
         self.model = VoxCPM.from_pretrained(self.model_id, load_denoiser=False)
-        self._device = "cuda:0"
+        self._device = str(next(self.model.parameters()).device)
 
     @property
     def is_ready(self) -> bool:
@@ -42,6 +42,8 @@ class Synthesizer:
         cfg_value: float = 2.0,
         inference_timesteps: int = 10,
     ) -> bytes:
+        if self.model is None:
+            raise RuntimeError("Synthesizer is not loaded; call load() first")
         full_text = self.build_text(text, voice_description)
         wav: np.ndarray = self.model.generate(
             text=full_text,

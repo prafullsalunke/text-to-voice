@@ -94,3 +94,26 @@ def test_generate_passes_custom_cfg_and_steps(ready_synthesizer, mock_voxcpm_mod
         cfg_value=3.5,
         inference_timesteps=20,
     )
+
+
+# --- vram_used_gb ---
+
+def test_vram_used_gb_returns_zero_before_load():
+    s = Synthesizer("openbmb/VoxCPM2")
+    assert s.vram_used_gb == 0.0
+
+
+def test_vram_used_gb_returns_float_after_load(ready_synthesizer):
+    mock_torch = MagicMock()
+    mock_torch.cuda.memory_allocated.return_value = 7_800_000_000
+    with patch.dict(sys.modules, {"torch": mock_torch}):
+        result = ready_synthesizer.vram_used_gb
+    assert result == 7.8
+
+
+# --- generate guard ---
+
+def test_generate_raises_if_not_loaded():
+    s = Synthesizer("openbmb/VoxCPM2")
+    with pytest.raises(RuntimeError, match="not loaded"):
+        s.generate("Hello")
