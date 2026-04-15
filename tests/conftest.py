@@ -1,6 +1,10 @@
+import sys
 import numpy as np
 import pytest
 from unittest.mock import MagicMock
+
+# Mock voxcpm module at import time so synthesizer.py can be imported
+sys.modules['voxcpm'] = MagicMock()
 
 
 @pytest.fixture
