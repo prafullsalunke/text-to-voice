@@ -1,0 +1,11 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic-settings>=2.7.0
+soundfile>=0.12.1
+numpy>=1.26.0
+httpx>=0.27.0
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+# Install separately (GPU-specific builds):
+# torch>=2.5.0  -> pip install torch --index-url https://download.pytorch.org/whl/cu121
+# voxcpm        -> pip install voxcpm
