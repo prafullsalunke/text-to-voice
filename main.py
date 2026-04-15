@@ -46,7 +46,6 @@ def health():
 class SynthesizeRequest(BaseModel):
     text: str = Field(..., min_length=1)
     voice_description: Optional[str] = None
-    language: str = "en"
     cfg_value: float = 2.0
     inference_timesteps: int = 10
 
