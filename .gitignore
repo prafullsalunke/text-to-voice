@@ -1,0 +1,5 @@
+.worktrees/
+*.wav
+__pycache__/
+*.pyc
+.env
