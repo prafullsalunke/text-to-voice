@@ -104,6 +104,13 @@ cp .env.example .env
 MODEL_ID=openbmb/VoxCPM2    # or openbmb/VoxCPM1.5 for a lighter model
 PORT=8000
 TEXT_MAX_LENGTH=500
+
+# Required if the model is gated on HuggingFace
+# HF_TOKEN=your_token_here
+
+# JWT authentication (leave unset to disable auth for local dev)
+# API_SECRET=<RSA private key PEM>   # signs tokens (keep secret)
+# API_TOKEN=<RSA public key PEM>     # verifies tokens at runtime
 ```
 
 ---
@@ -134,6 +141,63 @@ the server is ready.
 
 ---
 
+## Docker
+
+The easiest way to deploy on a Linux server with an NVIDIA GPU.
+
+**Prerequisites:** [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed on the host.
+
+```bash
+cp .env.example .env   # fill in API_TOKEN and any other vars
+docker compose up --build
+```
+
+Model weights are downloaded on first start and cached in a named Docker volume (`hf_cache`) — subsequent restarts skip the download.
+
+To run without a GPU (CPU-only, slower):
+
+```bash
+# Remove the deploy.resources block from docker-compose.yml, then:
+docker compose up --build
+```
+
+---
+
+## Authentication
+
+When `API_TOKEN` (RSA public key) is set, all endpoints require a signed JWT in the `Authorization` header. If `API_TOKEN` is not set, auth is disabled — useful for local development.
+
+**Generate a keypair:**
+
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+**Issue a token (using the private key):**
+
+```python
+import jwt, datetime
+
+token = jwt.encode(
+    {"sub": "client", "exp": datetime.datetime.utcnow() + datetime.timedelta(days=365)},
+    open("private.pem").read(),
+    algorithm="RS256",
+)
+print(token)
+```
+
+Add to `.env`:
+
+```env
+API_SECRET=<contents of private.pem>   # keep this secret
+API_TOKEN=<contents of public.pem>     # loaded by the server to verify requests
+```
+
+Tokens are verified against the public key (`API_TOKEN`) at runtime using RS256. The server never needs the private key — it can be stored offline.
+
+---
+
 ## API reference
 
 ### `GET /health`
@@ -153,6 +217,11 @@ Check whether the model is loaded.
 **Response `503 Service Unavailable`** (model still loading):
 ```json
 { "detail": "Model not ready" }
+```
+
+**Response `401 Unauthorized`** (missing or invalid token):
+```json
+{ "detail": "Missing Bearer token" }
 ```
 
 ---
@@ -181,6 +250,7 @@ Body: raw WAV bytes (48 kHz)
 | Status | Condition |
 |---|---|
 | `400` | Text exceeds 500 characters |
+| `401` | Missing, expired, or invalid Bearer token |
 | `422` | Missing or empty `text` field |
 | `500` | Inference failed (e.g. out of memory) |
 | `503` | Model not loaded yet |
@@ -193,6 +263,7 @@ Basic TTS:
 ```bash
 curl -X POST http://localhost:8000/synthesize \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_jwt>" \
   -d '{"text": "Welcome to the future of content creation."}' \
   --output output.wav
 ```
@@ -201,6 +272,7 @@ Voice design:
 ```bash
 curl -X POST http://localhost:8000/synthesize \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_jwt>" \
   -d '{
     "text": "This is your voiceover.",
     "voice_description": "Middle-aged man, warm and authoritative"
@@ -222,7 +294,10 @@ JavaScript (browser):
 ```js
 const res = await fetch('http://localhost:8000/synthesize', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+  },
   body: JSON.stringify({ text: 'Hello world', voice_description: 'Calm narrator' }),
 });
 const blob = await res.blob();
