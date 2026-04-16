@@ -200,9 +200,11 @@ Tokens are verified against the public key (`API_TOKEN`) at runtime using RS256.
 
 ## API reference
 
+Requests are processed asynchronously via a job queue — submit a job, poll for completion, then download the audio. All endpoints require `Authorization: Bearer <jwt>` when `API_TOKEN` is set.
+
 ### `GET /health`
 
-Check whether the model is loaded.
+Check whether the model is loaded and how deep the job queue is.
 
 **Response `200 OK`:**
 ```json
@@ -210,99 +212,150 @@ Check whether the model is loaded.
   "status": "ok",
   "model": "openbmb/VoxCPM2",
   "device": "mps:0",
-  "vram_used_gb": 5.6
+  "vram_used_gb": 5.6,
+  "queue_depth": 2
 }
 ```
 
-**Response `503 Service Unavailable`** (model still loading):
+**Response `503`** — model still loading.
+**Response `401`** — missing or invalid token.
+
+---
+
+### `GET /voices`
+
+List available named voice presets (defined in `voices.json`).
+
+**Response `200 OK`:**
 ```json
-{ "detail": "Model not ready" }
+{
+  "Alex": "Young male voice, calm and thoughtful narrator, slow and deliberate",
+  "Sarah": "Young female voice, warm and gentle, slightly smiling",
+  "Marcus": "Middle-aged male voice, deep and authoritative, professional tone",
+  "Aria": "Young female voice, bright and energetic, cheerful tone"
+}
 ```
 
-**Response `401 Unauthorized`** (missing or invalid token):
-```json
-{ "detail": "Missing Bearer token" }
-```
+To add or edit presets, modify `voices.json` and restart the server.
 
 ---
 
 ### `POST /synthesize`
 
-Convert text to speech and return a WAV file.
+Enqueue a synthesis job. Returns immediately with a `job_id`.
 
 **Request body (JSON):**
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `text` | string | yes | — | Text to speak. Max 500 characters. |
-| `voice_description` | string | no | `null` | Natural language voice style, e.g. `"Young woman, gentle voice"`. Omit for default voice. |
-| `cfg_value` | float | no | `2.0` | Style adherence strength. Higher = closer to description. |
-| `inference_timesteps` | int | no | `10` | Quality vs speed trade-off. Higher = better quality, slower. |
+| `voice` | string | no | `null` | Preset name from `voices.json`, e.g. `"Alex"`. |
+| `voice_description` | string | no | `null` | Raw voice description. Overrides `voice` if both are provided. |
+| `cfg_value` | float | no | `2.0` | Style adherence. Higher = closer to description (try `3.0`–`4.0` for consistency). |
+| `inference_timesteps` | int | no | `10` | Quality vs speed. Higher = better quality, slower. |
 
-**Response `200 OK`:**
-```
-Content-Type: audio/wav
-Body: raw WAV bytes (48 kHz)
+**Response `202 Accepted`:**
+```json
+{ "job_id": "f47ac10b-...", "status": "queued" }
 ```
 
 **Error responses:**
 
 | Status | Condition |
 |---|---|
-| `400` | Text exceeds 500 characters |
+| `400` | Text exceeds 500 characters, or unknown `voice` preset |
 | `401` | Missing, expired, or invalid Bearer token |
 | `422` | Missing or empty `text` field |
-| `500` | Inference failed (e.g. out of memory) |
 | `503` | Model not loaded yet |
+
+---
+
+### `GET /jobs/{job_id}`
+
+Poll job status.
+
+**Response `200 OK`:**
+```json
+{ "job_id": "f47ac10b-...", "status": "queued" }
+{ "job_id": "f47ac10b-...", "status": "processing" }
+{ "job_id": "f47ac10b-...", "status": "done" }
+{ "job_id": "f47ac10b-...", "status": "failed", "error": "..." }
+```
+
+**Response `404`** — job not found.
+
+---
+
+### `GET /jobs/{job_id}/audio`
+
+Download the generated WAV file. Only available when status is `done`.
+
+**Response `200 OK`:**
+```
+Content-Type: audio/wav
+Body: WAV file (48 kHz)
+```
+
+**Response `425 Too Early`** — job is still `queued` or `processing`.
+**Response `404`** — job not found.
 
 ---
 
 **Examples:**
 
-Basic TTS:
+Using a voice preset:
 ```bash
-curl -X POST http://localhost:8000/synthesize \
+# Submit job
+JOB=$(curl -s -X POST http://localhost:8000/synthesize \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_jwt>" \
-  -d '{"text": "Welcome to the future of content creation."}' \
+  -d '{"text": "Welcome to the show.", "voice": "Alex"}')
+echo $JOB
+# {"job_id":"f47ac10b-...","status":"queued"}
+
+JOB_ID=$(echo $JOB | python3 -c "import sys,json; print(json.load(sys.stdin)['job_id'])")
+
+# Poll until done
+curl -s http://localhost:8000/jobs/$JOB_ID \
+  -H "Authorization: Bearer <your_jwt>"
+
+# Download audio
+curl -s http://localhost:8000/jobs/$JOB_ID/audio \
+  -H "Authorization: Bearer <your_jwt>" \
   --output output.wav
 ```
 
-Voice design:
+Using a raw voice description:
 ```bash
-curl -X POST http://localhost:8000/synthesize \
+curl -s -X POST http://localhost:8000/synthesize \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_jwt>" \
-  -d '{
-    "text": "This is your voiceover.",
-    "voice_description": "Middle-aged man, warm and authoritative"
-  }' \
-  --output output.wav
-```
-
-Play on macOS:
-```bash
-afplay output.wav
-```
-
-Play on Linux:
-```bash
-aplay output.wav
+  -d '{"text": "This is your voiceover.", "voice_description": "Middle-aged man, warm and authoritative", "cfg_value": 3.5}'
 ```
 
 JavaScript (browser):
 ```js
-const res = await fetch('http://localhost:8000/synthesize', {
+// Submit
+const { job_id } = await fetch('http://localhost:8000/synthesize', {
   method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
-  },
-  body: JSON.stringify({ text: 'Hello world', voice_description: 'Calm narrator' }),
-});
-const blob = await res.blob();
-const url = URL.createObjectURL(blob);
-new Audio(url).play();
+  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+  body: JSON.stringify({ text: 'Hello world', voice: 'Alex' }),
+}).then(r => r.json());
+
+// Poll
+let status;
+do {
+  await new Promise(r => setTimeout(r, 1000));
+  ({ status } = await fetch(`http://localhost:8000/jobs/${job_id}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  }).then(r => r.json()));
+} while (status !== 'done' && status !== 'failed');
+
+// Download and play
+const blob = await fetch(`http://localhost:8000/jobs/${job_id}/audio`, {
+  headers: { 'Authorization': `Bearer ${token}` },
+}).then(r => r.blob());
+new Audio(URL.createObjectURL(blob)).play();
 ```
 
 ---
