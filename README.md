@@ -379,6 +379,30 @@ All 31 tests run without a GPU — VoxCPM is mocked at the test layer.
 
 ---
 
+## Known Limitations
+
+> **WIP** — these are active limitations of the underlying VoxCPM2 model, not the API layer.
+
+### Voice consistency
+
+Voice Design results are non-deterministic. The same `voice_description` can produce different genders, accents, or personas across runs. This is a [known upstream limitation](https://github.com/OpenBMB/VoxCPM) — the VoxCPM2 team is actively working on improving controllability consistency.
+
+**Workarounds while this is being fixed:**
+
+- **Retry 1–3 times** — the docs suggest running generation a few times to land on the desired voice
+- **Be explicit with gender** — lead with `"Young male voice, ..."` or `"Female voice, ..."` rather than implied gender from a name or role
+- **Raise `cfg_value`** — the default is `2.0`; increasing to `3.0`–`4.0` makes the model adhere more closely to the description and reduces random drift:
+  ```bash
+  curl -X POST http://localhost:8000/synthesize \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer <your_jwt>" \
+    -d '{"text": "Hello.", "voice_description": "Young male voice, calm and thoughtful", "cfg_value": 3.5}' \
+    --output output.wav
+  ```
+- **Use reference audio** *(not yet supported by this API)* — passing a reference WAV pins the voice identity and produces consistent results. Reference audio support is planned.
+
+---
+
 ## CORS
 
 The server allows requests from:
