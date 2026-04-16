@@ -46,17 +46,21 @@ class Synthesizer:
         self,
         text: str,
         voice_description: str | None = None,
+        reference_wav_path: str | None = None,
         cfg_value: float = 2.0,
         inference_timesteps: int = 10,
     ) -> bytes:
         if self.model is None:
             raise RuntimeError("Synthesizer is not loaded; call load() first")
         full_text = self.build_text(text, voice_description)
-        wav: np.ndarray = self.model.generate(
+        kwargs = dict(
             text=full_text,
             cfg_value=cfg_value,
             inference_timesteps=inference_timesteps,
         )
+        if reference_wav_path:
+            kwargs["reference_wav_path"] = reference_wav_path
+        wav: np.ndarray = self.model.generate(**kwargs)
         buf = io.BytesIO()
         sf.write(buf, wav, self.model.tts_model.sample_rate, format="WAV")
         buf.seek(0)
