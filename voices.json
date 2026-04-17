@@ -3,7 +3,10 @@
     "description": "Young male voice, calm and thoughtful narrator, slow and deliberate",
     "reference": "voices/alex.wav"
   },
-  "Sarah": "Young female voice, warm and gentle, slightly smiling",
+  "Sarah": {
+    "description": "Young female voice, warm and gentle, slightly smiling",
+    "reference": "voices/sarah.wav"
+  },
   "Marcus": "Middle-aged male voice, deep and authoritative, professional tone",
   "Aria": "Young female voice, bright and energetic, cheerful tone"
 }
